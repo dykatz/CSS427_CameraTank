@@ -1,0 +1,8 @@
+[Unit]
+Description=Video Stream
+
+[Service]
+ExecStart=/bin/bash -c "raspivid -t 0 -n -w 1280 -h 720 -hf -ih -fps 20 -o - | nc -k -l 2222"
+
+[Install]
+WantedBy=multi-user.target
