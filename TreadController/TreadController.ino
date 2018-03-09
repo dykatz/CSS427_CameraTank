@@ -1,10 +1,14 @@
-#include <Wire.h>
-#include <Adafruit_MotorShield.h>
-//#include <Servo.h>
 
-Adafruit_MotorShield AFMS = Adafruit_MotorShield();
-Adafruit_DCMotor *left_mtr = AFMS.getMotor(1), *right_mtr = AFMS.getMotor(2);
-//Servo pitch, yaw;
+#include <Wire.h>
+#define IN1  8   //K1、K2 motor direction
+#define IN2  9     //K1、K2 motor direction
+#define IN3  10    //K3、K4 motor direction
+#define IN4  12   //K3、K4 motor direction
+#define ENA  5    // Needs to be a PWM pin to be able to control motor speed ENA
+#define ENB  6    // Needs to be a PWM pin to be able to control motor speed ENB
+#define LED1 2  //lefe led connect to D2
+#define LED2 3  //right led connect to D3
+
 int spd = 0;
 int ySpeed = 0;
 int xSpeed = 0;
@@ -13,16 +17,21 @@ int lMotor = 0;
 int countWithoutInput;
 
 void setup() {
-  AFMS.begin();
   countWithoutInput = 0;
 
-  left_mtr->run(RELEASE);
-  right_mtr->run(RELEASE);
-  //pitch.attach(10);
-  //yaw.attach(9);
+  pinMode(LED1, OUTPUT);
+  pinMode(LED2, OUTPUT);
+  digitalWrite(LED1,HIGH);
+  digitalWrite(LED2,HIGH);
+    /******L298N******/
+  pinMode(IN1, OUTPUT); 
+  pinMode(IN2, OUTPUT); 
+  pinMode(IN3, OUTPUT);
+  pinMode(IN4, OUTPUT); 
+  pinMode(ENA, OUTPUT);  
+  pinMode(ENB, OUTPUT);
 
   Serial.begin(9600);
-  Serial2.begin(9600);
 
   ySpeed = 0;
   xSpeed = 0;
@@ -31,72 +40,119 @@ void setup() {
 }
 
 void loop() {
-  //left_mtr->run(FORWARD);
-  //right_mtr->run(FORWARD);
-
-#define SET_SPEEDS(x,y) do { \
-  left_mtr->setSpeed(x);   \
-  right_mtr->setSpeed(y);  \
-} while (0)
-
-  if(Serial2.available() > 1)
+  if(Serial.available() > 1)
   {
-    xSpeed = Serial2.read() - 128;
-    ySpeed = 128 - Serial2.read();
+    xSpeed = Serial.read();
+    ySpeed = Serial.read();
     countWithoutInput = 0;
   }
   else
   {
-    if(countWithoutInput++ > 20)
+    if(countWithoutInput++ > 2000)
     {
-      xSpeed = 0;
-      ySpeed = 0;
+      xSpeed = 128;
+      ySpeed = 128;
+      go_stop();
+      delay(50);
+      countWithoutInput = 2001;
     }
   }
-  Serial.print(xSpeed, DEC);
-  Serial.write(" ");
-  Serial.print(ySpeed, DEC);
-  Serial.write("\n");
-
-  lMotor = ySpeed + xSpeed;
-  rMotor = ySpeed - xSpeed;
-
-  if(lMotor > 0)
+  if(ySpeed > 128)
   {
-    left_mtr->run(FORWARD);
+    if(xSpeed < 64)
+    {
+      digitalWrite(IN1,HIGH);
+      digitalWrite(IN2,LOW);
+      digitalWrite(IN3,LOW);
+      digitalWrite(IN4,HIGH);
+      analogWrite(ENA, ySpeed - xSpeed); 
+      analogWrite(ENB, ySpeed - xSpeed);
+    }
+    else if(xSpeed >= 192)
+    {
+      digitalWrite(IN1,LOW);
+      digitalWrite(IN2,HIGH);
+      digitalWrite(IN3,HIGH);
+      digitalWrite(IN4,LOW);
+      analogWrite(ENA, (ySpeed + xSpeed - 128) % 256); 
+      analogWrite(ENB, (ySpeed + xSpeed - 128) % 256);
+    }
+    else
+    {
+      digitalWrite(IN1,LOW);
+      digitalWrite(IN2,HIGH);
+      digitalWrite(IN3,LOW);
+      digitalWrite(IN4,HIGH);
+      analogWrite(ENA, ySpeed); 
+      analogWrite(ENB, ySpeed);
+    }
   }
-  else
+  else if(ySpeed < 128)
   {
-    left_mtr->run(BACKWARD);
+    if(xSpeed < 64)
+    {
+      digitalWrite(IN1,LOW);
+      digitalWrite(IN2,HIGH);
+      digitalWrite(IN3,HIGH);
+      digitalWrite(IN4,LOW);
+      analogWrite(ENA, 255 - ySpeed - xSpeed); 
+      analogWrite(ENB, 255 - ySpeed - xSpeed);
+    }
+    else if(xSpeed >= 192)
+    {
+      digitalWrite(IN1,HIGH);
+      digitalWrite(IN2,LOW);
+      digitalWrite(IN3,LOW);
+      digitalWrite(IN4,HIGH);
+      analogWrite(ENA, (127 + ySpeed + xSpeed) % 256); 
+      analogWrite(ENB, (127 + ySpeed + xSpeed) % 256);
+    }
+    else
+    {
+      digitalWrite(IN1,HIGH);
+      digitalWrite(IN2,LOW);
+      digitalWrite(IN3,HIGH);
+      digitalWrite(IN4,LOW); 
+      analogWrite(ENA, 255 - ySpeed); 
+      analogWrite(ENB, 255 - ySpeed);
+    }
   }
-  
-  if(rMotor > 0)
+  else if(xSpeed < 192 && xSpeed > 64)
   {
-    right_mtr->run(FORWARD);
+    go_stop();
   }
-  else
-  {
-    right_mtr->run(BACKWARD);
-  }
-  
-  SET_SPEEDS( (lMotor > 0 ? lMotor : -lMotor),
-              (rMotor > 0 ? rMotor : -rMotor));
-  delay(5);
-
-  /*
-  for (spd = 0; spd < 180; ++spd) SET_SPEEDS(spd);
-  for (spd = 180; spd != 0; --spd) SET_SPEEDS(spd);
-
-  left_mtr->run(BACKWARD);
-  right_mtr->run(BACKWARD);
-
-  for (spd = 0; spd < 180; ++spd) SET_SPEEDS(spd);
-  for (spd = 180; spd != 0; --spd) SET_SPEEDS(spd);
-  */
-
-#undef SET_SPEEDS
-
-  //left_mtr->run(RELEASE);
-  //right_mtr->run(RELEASE);
-  //delay(1000);
+  //delay(5);
 }
+
+/*robot go ahead*/
+void go_ahead()
+{
+  //set motor spped
+  analogWrite(ENA,255); 
+  analogWrite(ENB,255);
+  //motor go ahead
+  digitalWrite(IN1,LOW);
+  digitalWrite(IN2,HIGH);
+  digitalWrite(IN3,LOW);
+  digitalWrite(IN4,HIGH); 
+}
+/*robot go back*/
+void go_back()
+{ 
+  //set motor spped
+  analogWrite(ENA,255); 
+  analogWrite(ENB,255);
+  //motor go back
+  digitalWrite(IN1,HIGH);
+  digitalWrite(IN2,LOW);
+  digitalWrite(IN3,HIGH);
+  digitalWrite(IN4,LOW); 
+}
+/*robot stop*/
+void go_stop()
+{
+  //change the speed to 0 to stop the motor
+  analogWrite(ENA,0); 
+  analogWrite(ENB,0);
+}
+
